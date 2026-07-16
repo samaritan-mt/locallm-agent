@@ -1,0 +1,9 @@
+agents/
+docs/
+doc/
+__pycache__/
+*.py[cod]
+*$py.class
+locallm-venv/
+test_native.py
+test_syslog.py
