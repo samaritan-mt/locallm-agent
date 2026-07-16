@@ -1,8 +1,9 @@
 import typer
 from policy.config import AllowedModels
 from llm import *
-from audit.events import AskAuditEvent
+from audit.events import AskAuditEvent,SessionAuditEvent
 from audit.logger import log_audit_event
+from session import SecureChatSession
 
 app = typer.Typer( no_args_is_help=True,
     help="LocalSec Agent — A local-first macOS AI assistant for security engineers.",
@@ -52,7 +53,7 @@ def ask_command(
         )
         log_audit_event(event)
         raise
-@app.command("help",)
+@app.command("help")
 def help_command():
     print("""
     Securely ask a question to your local AI model.
@@ -66,6 +67,42 @@ def help_command():
     
     $ localai ask "What is the difference between SAST and DAST?" --model mistral:7b
     """)
+
+@app.command("agent")
+def agent_command():
+    session = SecureChatSession()
+    print("Starting secure chat session. Type '/exit' or '/quit' to end the session.")
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() in ["/exit", "/quit"]:
+            quitEvent = SessionAuditEvent(
+                model=AllowedModels.QWEN.value,
+                input_chars=len(user_input),
+                output_chars=len(session.get_context()),
+                total_turns=len(session.messages),
+                success=True,
+                endpoint_type="local"
+            )
+            log_audit_event(quitEvent)
+            break
+        if user_input.lower() == "/clear":
+            session.clear()
+            print("Session cleared.")
+            continue
+        session.add_user_message(user_input)
+        context = session.get_context()
+        answer = query_local_llm(AllowedModels.QWEN, 0.2, 8000, False, context)
+        messageEvent = SessionAuditEvent(
+            model=AllowedModels.QWEN.value,
+            input_chars=len(user_input),
+            output_chars=len(answer),
+            total_turns=len(session.messages),
+            success=True,
+            endpoint_type="local"
+        )
+        log_audit_event(messageEvent)
+        session.add_assistant_message(answer)
+        session.output_message(answer)
     
 if __name__ == "__main__":
     app()

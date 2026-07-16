@@ -22,7 +22,7 @@ class NativeSysLogHandler(logging.Handler):
         self.syslog.syslog(pri, msg)
 
 def get_audit_logger():
-    logger = logging.getLogger("LocalSecAgentAudit")
+    logger = logging.getLogger("LocaLLM")
     logger.setLevel(logging.INFO)
     
     # Avoid adding multiple handlers if called multiple times

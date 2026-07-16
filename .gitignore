@@ -7,3 +7,4 @@ __pycache__/
 locallm-venv/
 test_native.py
 test_syslog.py
+claude-code*/

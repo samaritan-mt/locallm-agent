@@ -1,12 +1,14 @@
 import requests
+from typing import Union, List
 from policy.config import AllowedModels, LLMRunTimePolicyConfig
+from policy.prompts import PromptManager
 
 
-def query_local_llm(model: AllowedModels, temperature: float, max_input_chars: int, allow_remote_endpoint: bool, prompt: str):
+def query_local_llm(model: AllowedModels, temperature: float, max_input_chars: int, allow_remote_endpoint: bool, prompt: Union[str, list]):
     config = LLMRunTimePolicyConfig()
     
     # 1. Validation
-    if len(prompt) > max_input_chars:
+    if isinstance(prompt, str) and len(prompt) > max_input_chars:
         raise ValueError(f"Prompt size ({len(prompt)} chars) exceeds maximum allowed size ({max_input_chars})")
     
     # 2. Construct Payload
@@ -18,29 +20,20 @@ def query_local_llm(model: AllowedModels, temperature: float, max_input_chars: i
     endpoint = config.default_endpoint
     return call_local_llm(payload, endpoint)
 
-def construct_payload(model_name: str, temperature: float, prompt: str):
-    # CRITICAL: This bounds the AI and prevents prompt injection
-    system_prompt = (
-        "You are LocalSec Agent, a local-first assistant for security engineering workflows.\n\n"
-        "You answer questions and provide explanations only.\n\n"
-        "You cannot execute commands.\n"
-        "You cannot access files.\n"
-        "You cannot inspect environment variables.\n"
-        "You cannot access credentials.\n"
-        "You cannot access the network.\n"
-        "You cannot perform actions on the user's computer.\n\n"
-        "If the user asks you to perform an action, explain what command or process they could run manually, and highlight security risks.\n\n"
-        "If the user asks about a potentially destructive command, warn clearly.\n\n"
-        "Never claim that you performed an action.\n"
-        "Never claim that you inspected local files unless their content was explicitly provided in the prompt."
-    )
-    
-    return {
-        "model": model_name,
-        "messages": [
+def construct_payload(model_name: str, temperature: float, prompt: Union[str, list]):
+    if isinstance(prompt, str):
+        pm = PromptManager()
+        system_prompt = pm.load_prompt("ask")
+        messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
-        ],
+        ]
+    else:
+        messages = prompt
+        
+    return {
+        "model": model_name,
+        "messages": messages,
         "temperature": temperature,
         "stream": False
     }
