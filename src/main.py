@@ -4,6 +4,9 @@ from llm import *
 from audit.events import AskAuditEvent,SessionAuditEvent
 from audit.logger import log_audit_event
 from session import SecureChatSession
+from tools.command import execute_os_command
+from tools import schemas
+import re
 
 app = typer.Typer( no_args_is_help=True,
     help="LocalSec Agent — A local-first macOS AI assistant for security engineers.",
@@ -71,7 +74,7 @@ def help_command():
 @app.command("agent")
 def agent_command():
     session = SecureChatSession()
-    print("Starting secure chat session. Type '/exit' or '/quit' to end the session.")
+    print("Starting chat session. Type '/exit' or '/quit' to end the session.")
     while True:
         user_input = input("You: ")
         if user_input.lower() in ["/exit", "/quit"]:
@@ -90,19 +93,46 @@ def agent_command():
             print("Session cleared.")
             continue
         session.add_user_message(user_input)
-        context = session.get_context()
-        answer = query_local_llm(AllowedModels.QWEN, 0.2, 8000, False, context)
+        
+        output_chars = 0
+        while True:
+            context = session.get_context()
+            message = query_local_llm(AllowedModels.QWEN, 0.2, 8000, False, context, [schemas.ollama_json_schema()])
+            thought = re.search(r"<thought>(.*?)</thought>", message.get('content', ''), re.DOTALL)
+            if thought:
+                typer.secho(f"Thinking...\n", fg=typer.colors.MAGENTA)
+                typer.secho(thought.group(1), fg=typer.colors.CYAN)
+            if message.get('tool_calls'):
+                # Store the assistant's tool call in history
+                session.messages.append(message)
+                
+                tool_call = message.get('tool_calls')[0]
+                func = tool_call.get('function', {})
+                args = func.get('arguments', tool_call.get('args', {}))
+                
+                command_to_run = args.get('command', '')
+                tool_result = execute_os_command(command_to_run)
+
+                if len(tool_result) > 2000:
+                    tool_result = summarize_tool_output(tool_result, str(context))
+                
+                session.add_tool_message(tool_result)
+            else:
+                final_answer = message.get('content', '')
+                output_chars = len(final_answer)
+                session.add_assistant_message(final_answer)
+                session.output_message(final_answer)
+                break
+                
         messageEvent = SessionAuditEvent(
             model=AllowedModels.QWEN.value,
             input_chars=len(user_input),
-            output_chars=len(answer),
+            output_chars=output_chars,
             total_turns=len(session.messages),
             success=True,
             endpoint_type="local"
         )
         log_audit_event(messageEvent)
-        session.add_assistant_message(answer)
-        session.output_message(answer)
     
 if __name__ == "__main__":
     app()

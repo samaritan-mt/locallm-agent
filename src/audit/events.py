@@ -30,4 +30,16 @@ class SessionAuditEvent(BaseModel):
         # Auto-generate UTC ISO timestamp if not provided
         if not self.timestamp:
             self.timestamp = datetime.now(timezone.utc).isoformat()
-        
+    
+class ToolExecutionEvent(BaseModel):
+    timestamp: str = ""
+    tool_name: str
+    arguments: str
+    user_approved: bool
+    success: bool
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        # Auto-generate UTC ISO timestamp if not provided
+        if not self.timestamp:
+            self.timestamp = datetime.now(timezone.utc).isoformat()

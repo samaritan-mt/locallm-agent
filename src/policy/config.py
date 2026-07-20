@@ -14,11 +14,11 @@ class LLMRunTimePolicyConfig(BaseModel):
     default_temperature: float = Field(default=0.2, ge=0.0, le=1.0, description="LLM creativity temperature")
     default_stream: bool = False
 
-class AskPolicyConfig(BaseModel):
+class SessionPolicyConfig(BaseModel):
     # Security: All boundaries default to False as per the architecture spec
     can_read_files: bool = False
     can_write_files: bool = False
-    can_execute_commands: bool = False
+    can_execute_commands: bool = True
     can_access_secrets: bool = False
     can_access_network: bool = False
     can_access_memory: bool = False
@@ -26,6 +26,7 @@ class AskPolicyConfig(BaseModel):
     def is_allowed(self, action: str) -> bool:
         # Future implementation could map string actions to the boolean fields dynamically
         # E.g. return getattr(self, f"can_{action}", False)
+        
         return False
 
 
