@@ -1,14 +1,14 @@
-# LocalSec Agent — CLI Ask
+# LocaLLM Agent
 
-LocalSec Agent is a local-first macOS AI assistant designed for security engineers, DevSecOps workflows, and technical productivity.
+LocaLLM Agent is a local-first macOS AI assistant designed for security engineers, DevSecOps workflows, and technical productivity. By leveraging local LLMs through Ollama, it ensures that your data and prompts never leave your machine.
 
-The first feature, `localai ask`, provides a simple command-line interface to interact with a local language model running on your machine. It is built as the foundation for a future secured agent capable of reviewing Terraform, scanning repositories for secrets, explaining shell commands, and exposing controlled tools through Raycast and MCP.
+The agent features a stateful chat REPL and can autonomously execute tools inside sandboxed Docker containers to securely analyze repositories, explain shell commands, and interact with the host system without compromising security.
 
 The project is designed around three principles:
 
-1. **Local-first execution** — prompts and responses stay on the machine by default.
-2. **Security boundaries** — future tool execution must be policy-controlled and auditable.
-3. **Developer workflow integration** — the assistant should be usable from the terminal, Raycast, and eventually MCP-compatible clients.
+1. **Local-first execution** — prompts, data, and responses stay on the machine by default.
+2. **Security boundaries** — tool execution is sandboxed, policy-controlled, and strictly audited.
+3. **Developer workflow integration** — the assistant operates seamlessly from the terminal.
 
 ---
 
@@ -220,41 +220,6 @@ Or with pip:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-```
-
----
-
-## Suggested Project Structure
-
-```text
-localsec-agent/
-  README.md
-  pyproject.toml
-
-  src/
-    localai/
-      __init__.py
-      main.py
-      llm.py
-      config.py
-
-      tools/
-        __init__.py
-
-      policy/
-        __init__.py
-
-      audit/
-        __init__.py
-
-  tests/
-    test_llm.py
-    test_cli.py
-
-  examples/
-    prompts/
-      terraform-rollback.txt
-      secret-remediation.txt
 ```
 
 ---

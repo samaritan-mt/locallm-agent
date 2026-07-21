@@ -9,3 +9,7 @@ test_native.py
 test_syslog.py
 claude-code*/
 scratch.py
+tokens.txt
+readme-analysis.md
+analyze_readme.py
+frequency_analysis.md

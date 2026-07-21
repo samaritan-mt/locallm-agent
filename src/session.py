@@ -1,11 +1,23 @@
 import typer
 import shlex
-MAX_INPUT_CHARS = 10000
-MAX_HISTORY_LENGTH = 20
+MAX_INPUT_CHARS = 1000000
+MAX_HISTORY_LENGTH = 200
+from tools.schemas import ollama_json_schema, write_file_schema, read_file_schema
+from policy.prompts import DynamicPromptManager
 
 class SecureChatSession:
     def __init__(self):
-        self.system_prompt = "You are a helpful assistant."
+        pm = DynamicPromptManager()
+
+        enabled_tools = [ollama_json_schema(), write_file_schema(), read_file_schema()]
+
+        dynamic_enabled_tools = [schema["function"]["name"] for schema in enabled_tools]
+
+        self.system_prompt = pm.build_system_prompt(
+    template_name="base_agent",
+    enabled_tools=dynamic_enabled_tools,
+    max_input_chars=10000
+        )
         self.messages = [{"role": "system", "content": self.system_prompt}]
     
     def add_user_message(self, prompt: str):

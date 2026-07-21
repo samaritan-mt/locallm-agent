@@ -1,7 +1,7 @@
 import os
 import re
 
-class PromptManager:
+class DynamicPromptManager:
     """Loads and formats system prompts from markdown files."""
     
     def __init__(self, prompts_dir: str = None):
@@ -9,8 +9,18 @@ class PromptManager:
             # Default to the src/prompts directory
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             self.prompts_dir = os.path.join(base_dir, "prompts")
+            self.partials_dir = os.path.join(self.prompts_dir, "partials")
         else:
             self.prompts_dir = prompts_dir
+            self.partials_dir = os.path.join(self.prompts_dir, "partials")
+
+    def _load_partials(self, relative_path: str):
+        filepath = os.path.join(self.partials_dir, f"{relative_path}.md")
+        if not os.path.exists(filepath):
+            return ""
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read().strip()
+
 
     def load_prompt(self, prompt_name: str, **kwargs) -> str:
         """
@@ -32,3 +42,42 @@ class PromptManager:
             return content.format(**kwargs)
         except KeyError as e:
             raise ValueError(f"Missing required template variable for {prompt_name}_system.md: {e}")
+
+
+    def build_system_prompt(self, template_name: str, enabled_tools: list[str], **kwargs):
+        filepath = os.path.join(self.prompts_dir, f"{template_name}.md")
+
+        with open(filepath, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        content = re.sub(r'^<!--.*?-->\n?', '', content, flags=re.DOTALL).strip()
+
+        core_identity = self._load_partials("core_identity")
+        communication_style = self._load_partials("communication_style")
+        security_boundaries = self._load_partials("security_boundaries")
+        reasoning_process = self._load_partials("reasoning_process")
+        
+        tool_instructions = ""
+
+        if enabled_tools:
+            tool_instructions = "You have access to the following tools: \n\n"
+            for tool in enabled_tools:
+                tool_doc = self._load_partials(f"tools/{tool}")
+                if tool_doc:
+                    tool_instructions += f"## Tool: {tool}\n{tool_doc}\n\n"
+        else:
+            tool_instructions = "You currently do not have access to any external tools."
+        
+        content = content.replace("{{ core_identity }}", core_identity)
+        content = content.replace("{{ reasoning_process }}", reasoning_process)
+        content = content.replace("{{ communication_style }}", communication_style)
+        content = content.replace("{{ security_boundaries }}", security_boundaries)
+        content = content.replace("{{ tool_instructions }}", tool_instructions.strip())
+
+        try: 
+            return content.format(**kwargs)
+        except KeyError as e: 
+            raise ValueError(f"Missing required template variable for {template_name}.md: {e}")
+        
+
+        

@@ -1,7 +1,7 @@
 import requests
 from typing import Union, List
 from policy.config import AllowedModels, LLMRunTimePolicyConfig
-from policy.prompts import PromptManager
+from policy.prompts import DynamicPromptManager
 
 
 def query_local_llm(model: AllowedModels, 
@@ -30,8 +30,12 @@ tools: list=[]):
 
 def construct_payload(model_name: str, temperature: float, prompt: Union[str, list]):
     if isinstance(prompt, str):
-        pm = PromptManager()
-        system_prompt = pm.load_prompt("ask")
+        pm = DynamicPromptManager()
+        system_prompt = pm.build_system_prompt(
+            "ask",
+            enabled_tools=[],
+            max_input_chars=10000000
+        )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
@@ -64,8 +68,8 @@ def call_local_llm(payload: dict, endpoint: str):
 
 def summarize_tool_output(tool_result: str, context: str):
     try: 
-        prompt = f"The tool returned a very large output. Please summarize the following output, extracting the key information relevant to our current task and the original user request: \n\nContext: {context}\n\nTool Output: {tool_result}"
-        response = query_local_llm(AllowedModels.QWEN, 0.2, 8000, False, prompt)
+        prompt = f"The tool returned a very large output. Please summarize the following output, extracting the key information relevant to our current task and the original user request: \n\nContext: {context}\n\nTool Output: {tool_result[:30000]}"
+        response = query_local_llm(AllowedModels.QWEN, 0.2, 50000, False, prompt)
         return response.get('content', '')
     except Exception as e:
         raise ValueError(f"Could not summarize tool output: {e}")
