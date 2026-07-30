@@ -26,6 +26,16 @@ tools: list=[]):
     
     # 3. Call LLM
     endpoint = config.default_endpoint
+    
+    # Enforce remote endpoint policy
+    is_remote = not endpoint.startswith("http://127.0.0.1") and not endpoint.startswith("http://localhost")
+    if is_remote and not allow_remote_endpoint:
+        return {
+            "role": "assistant",
+            "content": "Error: Remote endpoint detected but --allow-remote-endpoint flag was not set. "
+                       "Pass --allow-remote-endpoint to allow connections outside localhost."
+        }
+        
     return call_local_llm(payload, endpoint)
 
 def construct_payload(model_name: str, temperature: float, prompt: Union[str, list]):

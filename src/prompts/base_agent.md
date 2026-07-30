@@ -2,6 +2,21 @@
 name: 'Agent System Prompt'
 description: 'Dynamic system prompt for the stateful agent REPL'
 -->
+<!--
+CACHING CONTRACT:
+This template is rendered once per SecureChatSession and must be fully deterministic.
+Do NOT inject:
+  - Timestamps (datetime.now(), time.time())
+  - Random values (uuid4(), random.random())
+  - Session-specific runtime state (turn count, user name)
+
+Any runtime state that varies per-turn must be passed via the conversation history
+(user/assistant/tool messages), never via the system prompt.
+
+The Ollama KV cache reuses prefix computation when the system prompt string is identical
+across requests. Changing the system prompt — even by one character — invalidates the cache
+and increases first-token latency for the entire session.
+-->
 {{ core_identity }}
 
 # Reasoning Process

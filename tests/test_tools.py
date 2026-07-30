@@ -46,8 +46,10 @@ class TestReadFilePathTraversal(unittest.TestCase):
 
 class TestUserApprovalGate(unittest.TestCase):
 
+    @patch("tools.command.SessionPolicyConfig")
     @patch("tools.command.typer.confirm", return_value=False)
-    def test_execute_os_command_denied_by_user(self, mock_confirm):
+    def test_execute_os_command_denied_by_user(self, mock_confirm, mock_policy):
+        mock_policy.return_value.can_execute_commands = True
         from tools.command import execute_os_command
         result = execute_os_command("rm -rf /")
         self.assertIn("denied", result.lower())
@@ -57,3 +59,54 @@ class TestUserApprovalGate(unittest.TestCase):
         from tools.command import write_file
         result = write_file(os.path.join(os.getcwd(), "out.txt"), "data")
         self.assertIn("denied", result.lower())
+
+import json
+
+class TestToolCallValidator(unittest.TestCase):
+
+    def setUp(self):
+        from tools.schemas import ollama_json_schema, write_file_schema, read_file_schema
+        from tools.validator import register_schemas
+        register_schemas([ollama_json_schema(), write_file_schema(), read_file_schema()])
+
+    def test_valid_execute_os_command(self):
+        from tools.validator import validate_tool_call
+        call = {"function": {"name": "execute_os_command", "arguments": '{"thought": "test", "command": "ls"}'}}
+        valid, err = validate_tool_call(call)
+        self.assertTrue(valid, err)
+
+    def test_missing_command_parameter(self):
+        from tools.validator import validate_tool_call
+        call = {"function": {"name": "execute_os_command", "arguments": '{"thought": "test"}'}}
+        valid, err = validate_tool_call(call)
+        self.assertFalse(valid)
+        self.assertIn("command", err)
+
+    def test_empty_thought_rejected(self):
+        from tools.validator import validate_tool_call
+        call = {"function": {"name": "execute_os_command", "arguments": '{"thought": "", "command": "ls"}'}}
+        valid, err = validate_tool_call(call)
+        self.assertFalse(valid)
+        self.assertIn("thought", err)
+
+    def test_malformed_json_arguments(self):
+        from tools.validator import validate_tool_call
+        call = {"function": {"name": "write_file", "arguments": "{not valid json"}}
+        valid, err = validate_tool_call(call)
+        self.assertFalse(valid)
+        self.assertIn("malformed", err.lower())
+
+    def test_unknown_tool_rejected(self):
+        from tools.validator import validate_tool_call
+        call = {"function": {"name": "delete_everything", "arguments": '{}'}}
+        valid, err = validate_tool_call(call)
+        self.assertFalse(valid)
+        self.assertIn("Unknown tool", err)
+
+    def test_oversized_argument_rejected(self):
+        from tools.validator import validate_tool_call
+        giant = "x" * 40_000
+        call = {"function": {"name": "execute_os_command", "arguments": json.dumps({"thought": "ok", "command": giant})}}
+        valid, err = validate_tool_call(call)
+        self.assertFalse(valid)
+        self.assertIn("32KB", err)

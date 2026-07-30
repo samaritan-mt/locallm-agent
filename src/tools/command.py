@@ -6,6 +6,7 @@ from tools import schemas
 from audit.events import ToolExecutionEvent
 from audit.logger import log_audit_event
 from policy.config import SessionPolicyConfig
+from policy.secrets import scan_for_secrets, redact_secrets
 
 def execute_os_command(command: str):
     policy = SessionPolicyConfig()
@@ -126,6 +127,25 @@ def read_file(filepath: str):
             success=True
         )
         log_audit_event(audit_event)
+
+        # Scan for secrets before injecting into conversation context
+        secrets = scan_for_secrets(content)
+        if secrets:
+            import typer
+            typer.secho(
+                f"\nWARNING: {len(secrets)} potential secret(s) detected in {filepath}:",
+                fg=typer.colors.RED
+            )
+            for s in secrets:
+                typer.secho(f"  - {s.pattern_name} ({s.match_preview})", fg=typer.colors.YELLOW)
+            
+            redacted = redact_secrets(content)
+            typer.secho(
+                "Secrets have been redacted in the version sent to the model.",
+                fg=typer.colors.CYAN
+            )
+            return redacted
+
         return content
     except Exception as e:
         audit_event = ToolExecutionEvent(

@@ -23,6 +23,7 @@ class SessionAuditEvent(BaseModel):
     output_chars: int
     total_turns: int
     endpoint_type: str = "local"
+    execution_enabled: bool = False
     success: bool
     
     def __init__(self, **data):

@@ -44,7 +44,10 @@ def get_audit_logger():
             
     return logger
 
-def log_audit_event(event: AskAuditEvent):
+from policy.secrets import redact_secrets
+
+def log_audit_event(event):
+    raw_json = event.model_dump_json()
+    safe_json = redact_secrets(raw_json)
     logger = get_audit_logger()
-    # Log as a pure JSON string inside the syslog entry
-    logger.info(event.model_dump_json())
+    logger.info(safe_json)

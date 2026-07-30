@@ -13,4 +13,7 @@ tokens.txt
 readme-analysis.md
 analyze_readme.py
 frequency_analysis.md
-.DS_Store
+*.DS_Store
+~/.locallm/sessions/
+locallm_agent.egg-info
+src/locallm_agent.egg-info

@@ -13,8 +13,11 @@ dependencies = [
 "pytest"
 ]
 [project.scripts]
-localai = "src.main:app"
+localai = "main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}

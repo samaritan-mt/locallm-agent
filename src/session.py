@@ -4,12 +4,18 @@ MAX_INPUT_CHARS = 1000000
 MAX_HISTORY_LENGTH = 200
 from tools.schemas import ollama_json_schema, write_file_schema, read_file_schema
 from policy.prompts import DynamicPromptManager
+from policy.config import LLMRunTimePolicyConfig
+from tools.validator import register_schemas
+from session_store import generate_session_id, save_session
 
 class SecureChatSession:
-    def __init__(self):
+    def __init__(self, session_id: str = None, model: str = None):
+        self.session_id = session_id or generate_session_id()
+        self.model = model or LLMRunTimePolicyConfig().default_model.value
         pm = DynamicPromptManager()
 
         enabled_tools = [ollama_json_schema(), write_file_schema(), read_file_schema()]
+        register_schemas(enabled_tools)
 
         dynamic_enabled_tools = [schema["function"]["name"] for schema in enabled_tools]
 
@@ -48,4 +54,8 @@ class SecureChatSession:
         # message = message.encode(encoding="utf-8",errors="backslashreplace").decode(encoding="utf-8",errors="ignore")
         message = shlex.quote(message) 
         typer.echo(message, nl=True)
+    
+    def save(self):
+        """Persist current conversation to disk."""
+        save_session(self.session_id, self.model, self.messages)
     

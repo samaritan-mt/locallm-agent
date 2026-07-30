@@ -18,7 +18,7 @@ class SessionPolicyConfig(BaseModel):
     # Security: All boundaries default to False as per the architecture spec
     can_read_files: bool = False
     can_write_files: bool = False
-    can_execute_commands: bool = True
+    can_execute_commands: bool = False
     can_access_secrets: bool = False
     can_access_network: bool = False
     can_access_memory: bool = False

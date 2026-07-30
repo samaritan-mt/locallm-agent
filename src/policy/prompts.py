@@ -44,7 +44,47 @@ class DynamicPromptManager:
             raise ValueError(f"Missing required template variable for {prompt_name}_system.md: {e}")
 
 
-    def build_system_prompt(self, template_name: str, enabled_tools: list[str], **kwargs):
+    NON_DETERMINISTIC_PATTERNS = [
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",  # ISO timestamps
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",  # UUIDs
+    ]
+
+    def build_system_prompt(self, template_name: str, enabled_tools: list, **kwargs) -> str:
+        prompt = self._build_raw(template_name, enabled_tools, **kwargs)
+        
+        for pattern in self.NON_DETERMINISTIC_PATTERNS:
+            if re.search(pattern, prompt):
+                import warnings
+                warnings.warn(
+                    f"System prompt contains potentially non-deterministic content matching /{pattern}/. "
+                    f"This will invalidate the Ollama KV cache on every call.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
+        
+        return prompt
+
+    def assert_deterministic(self, template_name: str, enabled_tools: list, **kwargs) -> str:
+        """
+        Builds the system prompt twice and asserts both outputs are identical.
+        Use in tests only. Raises AssertionError if non-deterministic content is found.
+        """
+        first = self.build_system_prompt(template_name, enabled_tools, **kwargs)
+        second = self.build_system_prompt(template_name, enabled_tools, **kwargs)
+        if first != second:
+            # Find first differing line for a useful error message
+            for i, (a, b) in enumerate(zip(first.splitlines(), second.splitlines())):
+                if a != b:
+                    raise AssertionError(
+                        f"System prompt is non-deterministic at line {i+1}:\n"
+                        f"  First:  {a!r}\n"
+                        f"  Second: {b!r}"
+                    )
+            raise AssertionError("System prompt outputs differ in length.")
+        return first
+
+
+    def _build_raw(self, template_name: str, enabled_tools: list[str], **kwargs):
         filepath = os.path.join(self.prompts_dir, f"{template_name}.md")
 
         with open(filepath, "r", encoding="utf-8") as f:
