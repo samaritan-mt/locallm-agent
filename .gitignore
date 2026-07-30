@@ -13,3 +13,4 @@ tokens.txt
 readme-analysis.md
 analyze_readme.py
 frequency_analysis.md
+.DS_Store
