@@ -16,7 +16,7 @@ class SecureChatSession:
         self.system_prompt = pm.build_system_prompt(
     template_name="base_agent",
     enabled_tools=dynamic_enabled_tools,
-    max_input_chars=10000
+    max_input_chars=10000000
         )
         self.messages = [{"role": "system", "content": self.system_prompt}]
     

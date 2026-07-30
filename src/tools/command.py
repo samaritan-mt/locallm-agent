@@ -10,6 +10,13 @@ from policy.config import SessionPolicyConfig
 def execute_os_command(command: str):
     policy = SessionPolicyConfig()
     if not policy.can_execute_commands:
+        audit_event = ToolExecutionEvent(
+            tool_name="execute_os_command",
+            arguments=command,
+            user_approved=False,
+            success=False
+        )
+        log_audit_event(audit_event)
         return "POLICY_VIOLATION: Command execution is disabled by the current security policy."
 
     authorization = typer.confirm(f"[LocaLLM Security] Approve the execution of command: '{command}'")
@@ -34,6 +41,13 @@ def execute_os_command(command: str):
             err = e.stderr.strip() if e.stderr else str(e)
             return f"Error executing command: {err}"
     else:
+        audit_event = ToolExecutionEvent(
+            tool_name="execute_os_command",
+            arguments=command,
+            user_approved=False,
+            success=False
+        )
+        log_audit_event(audit_event)
         return "User denied the execution of the command."
 
 
@@ -44,6 +58,13 @@ def write_file(filepath: str, content: str):
         try:
             abs_path = os.path.abspath(filepath)
             if not abs_path.startswith(os.getcwd()):
+                audit_event = ToolExecutionEvent(
+                    tool_name="write_file",
+                    arguments=f"filepath={filepath}",
+                    user_approved=False,
+                    success=False
+                )
+                log_audit_event(audit_event)
                 return "Security Violation: Cannot write files outside the workspace." 
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -56,8 +77,22 @@ def write_file(filepath: str, content: str):
             log_audit_event(event)
             return f"Successfully wrote to {filepath}"
         except Exception as e:
+            audit_event = ToolExecutionEvent(
+                tool_name="write_file",
+                arguments=f"filepath={filepath}",
+                user_approved=True,
+                success=False
+            )
+            log_audit_event(audit_event)
             return f"Error writing to file: {str(e)}"
     else:
+        audit_event = ToolExecutionEvent(
+            tool_name="write_file",
+            arguments=f"filepath={filepath}",
+            user_approved=False,
+            success=False
+        )
+        log_audit_event(audit_event)
         return "User denied writing to the file."
 
 
@@ -65,11 +100,39 @@ def read_file(filepath: str):
     try:
         abs_path = os.path.abspath(filepath)
         if not abs_path.startswith(os.getcwd()):
+            audit_event = ToolExecutionEvent(
+                tool_name="read_file",
+                arguments=f"filepath={filepath}",
+                user_approved=False,
+                success=False
+            )
+            log_audit_event(audit_event)
             return "Security Violation: Cannot read files outside the workspace."
         if not os.path.exists(filepath):
+            audit_event = ToolExecutionEvent(
+                tool_name="read_file",
+                arguments=f"filepath={filepath}",
+                user_approved=True,
+                success=False
+            )
+            log_audit_event(audit_event)
             return f"Error: File '{filepath}' does not exist."
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
+        audit_event = ToolExecutionEvent(
+            tool_name="read_file",
+            arguments=f"filepath={filepath}",
+            user_approved=True,
+            success=True
+        )
+        log_audit_event(audit_event)
         return content
     except Exception as e:
+        audit_event = ToolExecutionEvent(
+            tool_name="read_file",
+            arguments=f"filepath={filepath}",
+            user_approved=True,
+            success=False
+        )
+        log_audit_event(audit_event)
         return f"Error reading file: {str(e)}"

@@ -3,7 +3,7 @@ def ollama_json_schema():
       "type": "function",
       "function": {
         "name": "execute_os_command",
-        "description": "Execute a shell command inside an isolated Docker container running python:3.11-alpine. (Note: You are NOT on macOS. You are inside Alpine Linux. If you need external Python packages like nltk, you must pip install them first).",
+        "description": "Execute a shell command inside a sandboxed Docker container running python:3.11-alpine. The user's current directory is mounted at /workspace. You have full access to read and modify project files in this directory. If you need external Python packages like nltk, you must pip install them first.",
         "parameters": {
           "type": "object",
           "properties": {

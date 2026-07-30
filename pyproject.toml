@@ -10,6 +10,11 @@ dependencies = [
 "pydantic>=2.0.0",
 "pyyaml>=6.0.0",
 "ollama",
+"pytest"
 ]
 [project.scripts]
-localai = "locallm_agent.main:app"
+localai = "src.main:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "src"]
