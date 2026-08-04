@@ -14,6 +14,32 @@ class LLMRunTimePolicyConfig(BaseModel):
     default_temperature: float = Field(default=0.2, ge=0.0, le=1.0, description="LLM creativity temperature")
     default_stream: bool = False
 
+class OpenRouterRunTimePolicyConfig(BaseModel):
+    # v1: single hardcoded free-tier model. Structured as a list so adding a
+    # second free model later doesn't require touching the /openrouter flow.
+    allowed_models: list[str] = Field(
+        default_factory=lambda: ["nvidia/nemotron-3-nano-30b-a3b:free"],
+        description="Allowlisted OpenRouter model IDs"
+    )
+    # Hardcoded, not user-configurable: avoids someone pointing "openrouter" traffic elsewhere.
+    base_url: str = Field(
+        default="https://openrouter.ai/api/v1/chat/completions",
+        description="OpenRouter chat completions endpoint"
+    )
+    max_output_tokens: int = Field(
+        default=4096,
+        description=(
+            "Hard ceiling on generated tokens per call. Tool calls that need to emit a "
+            "long 'thought' plus substantial file content (e.g. write_file) can otherwise "
+            "get truncated mid-JSON, dropping required fields and forcing the correction loop."
+        )
+    )
+    max_calls_per_session: int = Field(
+        default=15,
+        description="Hard cap on remote calls per session (free tier is 50/day total)"
+    )
+
+
 class SessionPolicyConfig(BaseModel):
     # Security: All boundaries default to False as per the architecture spec
     can_read_files: bool = False

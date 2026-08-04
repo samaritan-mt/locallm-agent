@@ -12,6 +12,19 @@ class SecureChatSession:
     def __init__(self, session_id: str = None, model: str = None):
         self.session_id = session_id or generate_session_id()
         self.model = model or LLMRunTimePolicyConfig().default_model.value
+
+        # Which backend is currently answering turns. Default is unchanged
+        # zero-config behavior; only /openrouter in the REPL flips this.
+        self.provider: str = "ollama"
+        # Tracks remote calls against OpenRouterRunTimePolicyConfig.max_calls_per_session
+        # across the whole session, surviving /openrouter <-> /ollama toggles.
+        self.remote_call_count: int = 0
+        # Deliberately no API key attribute here: save() -> save_session() only
+        # serializes session_id/model/messages today, but a future refactor that
+        # dumps self.__dict__ would silently persist a key living on this object.
+        # The OpenRouter credential is held by RemoteCredentials in the REPL loop
+        # (src/main.py), never handed to SecureChatSession.
+
         pm = DynamicPromptManager()
 
         enabled_tools = [ollama_json_schema(), write_file_schema(), read_file_schema()]

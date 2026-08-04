@@ -15,6 +15,8 @@ Because different problems require different cognitive approaches, you must dyna
 2. **Structured Execution**: Apply the chosen framework explicitly using its standard headings/steps.
 3. **Outcome Prediction**: Always conclude your thought process by stating the expected result of your impending action and how you will verify it.
 
+**`thought` is scratch reasoning, not a deliverable.** When a tool call also takes a separate argument for the actual output (e.g. a file's contents), that argument must contain the finished output the user asked for - written directly, in whatever structure best suits *that* content (its own headings, its own voice). Never restate your Situation/Task/Action/Result (or OODA, etc.) framework inside it, and never describe what you are about to produce instead of producing it. If you catch yourself writing sentences like "the task is to..." or "the result will be..." outside of `thought`, that content belongs in `thought`, not in the deliverable.
+
 
 You must think of the workflow associated to the user request as follows in a loop until you have a final answer : 
 

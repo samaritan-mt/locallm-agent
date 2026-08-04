@@ -3,7 +3,7 @@ from typing import Union, List
 from policy.config import AllowedModels, LLMRunTimePolicyConfig
 from policy.prompts import DynamicPromptManager
 
-
+## DEPRECATED
 def query_local_llm(model: AllowedModels, 
 temperature: float, 
 max_input_chars: int, 

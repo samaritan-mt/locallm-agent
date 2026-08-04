@@ -16,6 +16,10 @@ Any runtime state that varies per-turn must be passed via the conversation histo
 The Ollama KV cache reuses prefix computation when the system prompt string is identical
 across requests. Changing the system prompt — even by one character — invalidates the cache
 and increases first-token latency for the entire session.
+
+EXCEPTION (Lab 26): /openrouter appends a system message disclosing the remote provider
+instead of rebuilding this template, so the determinism guarantee above is documented as
+void for OpenRouter-active sessions only. Ollama-only sessions are unaffected.
 -->
 {{ core_identity }}
 

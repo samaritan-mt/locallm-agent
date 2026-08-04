@@ -1,7 +1,9 @@
 import typer
-from policy.config import AllowedModels
+from policy.config import AllowedModels, OpenRouterRunTimePolicyConfig
 from llm import *
-from audit.events import AskAuditEvent,SessionAuditEvent
+from llm_router import LLMParams, LLMRouter, LocalOllamaProvider
+from providers.openrouter_provider import OpenRouterProvider, RemoteCredentials
+from audit.events import AskAuditEvent, SessionAuditEvent, ProviderSwitchAuditEvent, RemoteCallAuditEvent
 from audit.logger import log_audit_event
 from session import SecureChatSession
 from tools.command import execute_os_command, write_file, read_file
@@ -9,6 +11,8 @@ from tools import schemas
 from tools.validator import validate_tool_call, build_correction_prompt
 from policy.secrets import scan_for_secrets
 from session_store import load_session, list_sessions as list_all_sessions
+import getpass
+import os
 import re
 import time
 
@@ -56,7 +60,15 @@ def ask_command(
 
     
     try:
-        answer = query_local_llm(model,temperature, max_input_chars, allow_remote_endpoint, prompt)
+        params = LLMParams(
+            model=model.value if hasattr(model, 'value') else model,
+            temperature=temperature,
+            max_input_chars=max_input_chars,
+            allow_remote_endpoint=allow_remote_endpoint
+        )
+        provider_config = LLMRunTimePolicyConfig()
+        llm_router = LLMRouter(provider=LocalOllamaProvider(provider_config), config=provider_config)
+        answer = llm_router.ask(prompt, params)
         event = AskAuditEvent(
             model=model.value if hasattr(model, 'value') else model,
             input_chars=len(prompt),
@@ -64,7 +76,7 @@ def ask_command(
             endpoint_type="remote" if allow_remote_endpoint else "local"
         )
         log_audit_event(event)
-        print(f"A: {answer}")
+        print(f"OLLAMA: {answer}")
     except Exception as e:
         event = AskAuditEvent(
             model=model.value if hasattr(model, 'value') else model,
@@ -134,19 +146,26 @@ def agent_command(
             "WARNING: Command execution enabled. Commands will run inside locallm-sandbox.",
             fg=typer.colors.YELLOW
         )
+    # OpenRouter is opt-in and interactive-only (Lab 26). The key never
+    # touches session state or disk - it lives only in this local variable
+    # for the lifetime of the REPL loop.
+    openrouter_config = OpenRouterRunTimePolicyConfig()
+    remote_credentials: RemoteCredentials = None
+
     print("Starting chat session. Type '/exit' or '/quit' to end the session.")
     try:
         while True:
-            user_input = input("You: ")
+            prompt_label = "You: " if session.provider == "ollama" else f"You [{session.provider}]: "
+            user_input = input(prompt_label)
             if user_input.lower() in ["/exit", "/quit"]:
                 quitEvent = SessionAuditEvent(
-                    model=AllowedModels.QWEN.value,
+                    model=session.model if session.provider == "ollama" else openrouter_config.allowed_models[0],
                     input_chars=len(user_input),
                     output_chars=len(session.get_context()),
                     total_turns=len(session.messages),
                     execution_enabled=session.policy_config.can_execute_commands,
                     success=True,
-                    endpoint_type="local"
+                    endpoint_type="local" if session.provider == "ollama" else "remote"
                 )
                 log_audit_event(quitEvent)
                 break
@@ -154,7 +173,76 @@ def agent_command(
                 session.clear()
                 print("Session cleared.")
                 continue
-                
+
+            if user_input.lower() == "/openrouter":
+                if session.provider == "openrouter":
+                    typer.secho("Already using OpenRouter.", fg=typer.colors.CYAN)
+                    continue
+
+                api_key = os.environ.get("OPENROUTER_API_KEY")
+                if api_key:
+                    typer.secho("Using OPENROUTER_API_KEY from environment.", fg=typer.colors.BRIGHT_BLACK)
+                else:
+                    api_key = getpass.getpass("OpenRouter API key: ")
+
+                if not api_key:
+                    typer.secho("No API key provided. Staying on ollama.", fg=typer.colors.YELLOW)
+                    continue
+
+                candidate = OpenRouterProvider(openrouter_config, RemoteCredentials(api_key=api_key))
+                del api_key
+                typer.secho("Validating API key...", fg=typer.colors.BRIGHT_BLACK)
+                ok, error = candidate.validate()
+                if not ok:
+                    typer.secho(f"OpenRouter validation failed: {error}", fg=typer.colors.RED)
+                    continue
+
+                typer.secho(
+                    f"\nThis request will be sent to OpenRouter (model: {openrouter_config.allowed_models[0]}).\n"
+                    "Your prompt leaves your machine. OpenRouter does not log by default, but the underlying\n"
+                    "model provider's own data retention policy applies and may differ per model.",
+                    fg=typer.colors.YELLOW
+                )
+                if not typer.confirm("Continue?", default=False):
+                    typer.secho("Declined. Staying on ollama.", fg=typer.colors.CYAN)
+                    continue
+
+                remote_credentials = candidate.credentials
+                previous_provider = session.provider
+                session.provider = "openrouter"
+                session.messages.append({
+                    "role": "system",
+                    "content": (
+                        "Your responses are being generated by a remote model via OpenRouter for this session. "
+                        "You still cannot execute commands, access local files, or access credentials directly."
+                    )
+                })
+                log_audit_event(ProviderSwitchAuditEvent(
+                    from_provider=previous_provider,
+                    to_provider="openrouter",
+                    model=openrouter_config.allowed_models[0],
+                    success=True,
+                ))
+                typer.secho(f"Switched to OpenRouter ({openrouter_config.allowed_models[0]}).", fg=typer.colors.GREEN)
+                continue
+
+            if user_input.lower() == "/ollama":
+                if session.provider == "ollama":
+                    typer.secho("Already using ollama.", fg=typer.colors.CYAN)
+                    continue
+                remote_credentials = None
+                previous_provider = session.provider
+                session.provider = "ollama"
+                log_audit_event(ProviderSwitchAuditEvent(
+                    from_provider=previous_provider,
+                    to_provider="ollama",
+                    model=AllowedModels.QWEN.value,
+                    success=True,
+                ))
+                typer.secho("Switched back to ollama.", fg=typer.colors.GREEN)
+                continue
+
+
             secrets_found = scan_for_secrets(user_input)
             if secrets_found:
                 typer.secho("\nWARNING: Potential secrets detected in your input:", fg=typer.colors.RED, bold=True)
@@ -170,15 +258,61 @@ def agent_command(
                     continue
     
             session.add_user_message(user_input)
-            
+
             output_chars = 0
+            turn_aborted = False
             last_command_run = None
             turn_start = time.monotonic()
-            
+
             while True:
                 context = session.get_context()
-                message = query_local_llm(AllowedModels.QWEN, 0.2, 8000000, False, context, [schemas.ollama_json_schema(), schemas.write_file_schema(), schemas.read_file_schema()])
-                
+                tool_schemas = [schemas.ollama_json_schema(), schemas.write_file_schema(), schemas.read_file_schema()]
+
+                if session.provider == "openrouter":
+                    if session.remote_call_count >= openrouter_config.max_calls_per_session:
+                        typer.secho(
+                            f"Reached the per-session OpenRouter call cap ({openrouter_config.max_calls_per_session}). "
+                            "Use /ollama to switch back.",
+                            fg=typer.colors.RED
+                        )
+                        turn_aborted = True
+                        break
+
+                    provider = OpenRouterProvider(openrouter_config, remote_credentials)
+                    or_params = LLMParams(
+                        model=openrouter_config.allowed_models[0],
+                        temperature=0.2,
+                        max_input_chars=8000000,
+                        allow_remote_endpoint=True,
+                        tools=tool_schemas,
+                        extra={"max_output_tokens": openrouter_config.max_output_tokens},
+                    )
+                    try:
+                        payload = provider.query(context, or_params)
+                        message = provider.call(payload, openrouter_config.base_url, or_params)
+                    except ValueError as e:
+                        typer.secho(str(e), fg=typer.colors.RED)
+                        log_audit_event(RemoteCallAuditEvent(
+                            provider="openrouter",
+                            model=openrouter_config.allowed_models[0],
+                            input_chars=len(user_input),
+                            output_tokens_estimate=0,
+                            success=False,
+                        ))
+                        turn_aborted = True
+                        break
+
+                    session.remote_call_count += 1
+                    log_audit_event(RemoteCallAuditEvent(
+                        provider="openrouter",
+                        model=openrouter_config.allowed_models[0],
+                        input_chars=len(user_input),
+                        output_tokens_estimate=len(message.get('content') or '') // 4,
+                        success=True,
+                    ))
+                else:
+                    message = query_local_llm(AllowedModels.QWEN, 0.2, 8000000, False, context, tool_schemas)
+
                 tool_calls = message.get('tool_calls')
                 if tool_calls:
                     tool_call = tool_calls[0]
@@ -279,26 +413,31 @@ def agent_command(
                     session.add_assistant_message(final_answer)
                     session.output_message(final_answer_clean)
                     break
-                    
+
+            if turn_aborted:
+                # Fail closed: the cap/error was already reported to the user above.
+                # Don't log a successful turn or advance timing for a turn that never got a reply.
+                continue
+
             messageEvent = SessionAuditEvent(
-                model=AllowedModels.QWEN.value,
+                model=session.model if session.provider == "ollama" else openrouter_config.allowed_models[0],
                 input_chars=len(user_input),
                 output_chars=output_chars,
                 total_turns=len(session.messages),
                 execution_enabled=session.policy_config.can_execute_commands,
                 success=True,
-            endpoint_type="local"
-        )
-        log_audit_event(messageEvent)
-        session.save()
-        
-        turn_elapsed = time.monotonic() - turn_start
-        if debug_timing:
-            typer.secho(
-                f"[timing] Turn {len(session.messages)}: {turn_elapsed:.2f}s",
-                fg=typer.colors.BRIGHT_BLACK
+                endpoint_type="local" if session.provider == "ollama" else "remote"
             )
-            
+            log_audit_event(messageEvent)
+            session.save()
+
+            turn_elapsed = time.monotonic() - turn_start
+            if debug_timing:
+                typer.secho(
+                    f"[timing] Turn {len(session.messages)}: {turn_elapsed:.2f}s",
+                    fg=typer.colors.BRIGHT_BLACK
+                )
+
     except KeyboardInterrupt:
         typer.secho("\nSession interrupted. Saving...", fg=typer.colors.YELLOW)
         session.save()
