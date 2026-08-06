@@ -15,35 +15,43 @@ jobs:
     steps: 
     - name: checkout code 
       uses: actions/checkout@v4
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
-      with:
-        enable-cache: true
     - name: Setup python 
       uses: actions/setup-python@v5 
       with: 
         python-version: "3.12" 
     - name: install dependencies 
       run: |
-        uv sync 
+        python -m venv venv
+        source venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install . pytest
     - name: Run pytest suite
       run: |
-        uv run pytest tests/ 
+        source venv/bin/activate
+        pytest tests/ 
   snyk_scan:
     runs-on: ubuntu-latest
     steps: 
     - name: checkout code 
       uses: actions/checkout@v4
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
     - name: Setup python 
       uses: actions/setup-python@v5 
       with: 
         python-version: "3.12" 
     - name: install dependencies 
       run: |
-        uv sync 
-    - name: Snyk scan
-      uses: snyk/actions/python@master 
+        python -m venv venv
+        source venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install .
+        pip freeze > requirements.txt
+    - name: Setup Snyk
+      uses: snyk/actions/setup@master
+    - name: Snyk SAST (Code) scan
+      run: snyk code test
+      env: 
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} 
+    - name: Snyk SCA (Open Source) scan
+      run: snyk test --file=requirements.txt
       env: 
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} 
