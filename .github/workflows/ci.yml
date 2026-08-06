@@ -2,11 +2,13 @@
 
 name: Snyk and Test CI for locallm agent
 run-name: "CI - ${{ github.actor }}"
-on:
+"on":
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 jobs:
   sast_and_test:
     runs-on: ubuntu-latest
