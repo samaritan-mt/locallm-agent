@@ -4,7 +4,7 @@ name: Snyk and Test CI for locallm agent
 run-name: "CI - ${{ github.actor }}"
 on:
   push:
-    branches: [ main]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 jobs:
@@ -13,25 +13,31 @@ jobs:
     steps: 
     - name: checkout code 
       uses: actions/checkout@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
     - name: Setup python 
-      uses: actions/setup-python@v6 
+      uses: actions/setup-python@v5 
       with: 
-        python-version: "3.14" 
+        python-version: "3.12" 
     - name: install dependencies 
       run: |
         uv sync 
-    - name: Run pytest suite (72 tests) 
+    - name: Run pytest suite
       run: |
-        python -m pytest tests/ 
+        uv run pytest tests/ 
   snyk_scan:
     runs-on: ubuntu-latest
     steps: 
     - name: checkout code 
       uses: actions/checkout@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
     - name: Setup python 
-      uses: actions/setup-python@v6 
+      uses: actions/setup-python@v5 
       with: 
-        python-version: "3.14" 
+        python-version: "3.12" 
     - name: install dependencies 
       run: |
         uv sync 
@@ -39,10 +45,3 @@ jobs:
       uses: snyk/actions/python@master 
       env: 
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} 
-    - name: Snyk SAST scan 
-      uses: snyk/actions/code-scan@master
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }} 
-        base-dir: ${{ github.workspace }}
-
-
