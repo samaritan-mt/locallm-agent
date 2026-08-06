@@ -59,3 +59,8 @@ The goal is to build a local AI assistant that can eventually help with real sec
 
 The initial `ask` command is intentionally simple. It establishes the local inference layer before adding tools.
 
+
+The agent command line interface (CLI) is built using Python's built-in `argparse` library, providing a user-friendly and flexible interface for interacting with the LocalLLM Agent.
+
+
+
